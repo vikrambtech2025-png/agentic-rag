@@ -1,0 +1,13 @@
+﻿# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Data (never commit)
+data/
+.env
+
+# Chainlit
+.chainlit/
+.files/

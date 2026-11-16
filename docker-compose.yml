@@ -1,0 +1,18 @@
+version: "3.9"
+services:
+  rag-buddy:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ragdata:/data
+    environment:
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-openrouter/free}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      DATA_DIR: /data
+      LOG_LEVEL: INFO
+volumes:
+  ragdata:

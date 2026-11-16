@@ -1,0 +1,10 @@
+{"q": "What library do we use to extract markdown from PDFs?", "expected_chunk_ids": ["1f63799526dfa28ccaf8e4f658eb073a", "e07174ddf49fcadcdc6e01f922806ecd"], "must_refuse": false}
+{"q": "What is the chunk size and overlap for ingestion?", "expected_chunk_ids": ["1f63799526dfa28ccaf8e4f658eb073a"], "must_refuse": false}
+{"q": "How does retrieval combine vector and keyword search?", "expected_chunk_ids": ["ee303b719ac5b4f2b7c74f678b1b6b8d"], "must_refuse": false}
+{"q": "What fusion algorithm is used for hybrid search?", "expected_chunk_ids": ["ee303b719ac5b4f2b7c74f678b1b6b8d"], "must_refuse": false}
+{"q": "How are citations formatted in the generated answer?", "expected_chunk_ids": ["f2dde137d08345571f7bdeaf7caa623b"], "must_refuse": false}
+{"q": "What does the verifier node do?", "expected_chunk_ids": ["f2dde137d08345571f7bdeaf7caa623b"], "must_refuse": false}
+{"q": "Which function ingests a file path into the store?", "expected_chunk_ids": ["53851dc43b185305bcb4d6004fde69cf"], "must_refuse": false}
+{"q": "Where is the recursive character text splitter used?", "expected_chunk_ids": ["784591aae383d3df6f392bdc48ba301b"], "must_refuse": false}
+{"q": "What is the capital of France?", "expected_chunk_ids": [], "must_refuse": true}
+{"q": "Who invented the telephone?", "expected_chunk_ids": [], "must_refuse": true}

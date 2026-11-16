@@ -1,0 +1,9 @@
+.venv/
+data/
+.pytest_cache/
+__pycache__/
+*.pyc
+.git/
+.chainlit/
+.files/
+tests/fixtures/
