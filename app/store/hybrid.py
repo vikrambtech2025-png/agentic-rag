@@ -6,6 +6,10 @@ from app.store.embeddings import embed_one
 from app.store.keyword import fts_search
 
 
+def _esc(v: str) -> str:
+    return v.replace("'", "''")
+
+
 def _rrf(lists: list[list[dict]], k: int = 60) -> list[dict]:
     scores: dict[str, float] = {}
     by_id: dict[str, dict] = {}
@@ -23,10 +27,14 @@ def _rrf(lists: list[list[dict]], k: int = 60) -> list[dict]:
     return out
 
 
-def search(q: str, k: int = 8, where: str | None = None) -> list[dict]:
+def search(q: str, k: int = 8, where: str | None = None, user_id: str | None = None) -> list[dict]:
     vec = embed_one(q)
-    vres = vsearch(vec, k=k * 2, where=where)
-    fres = fts_search(q, k=k * 2)
+    vwhere = where
+    if user_id:
+        clause = f"user_id = '{_esc(user_id)}'"
+        vwhere = f"{vwhere} AND {clause}" if vwhere else clause
+    vres = vsearch(vec, k=k * 2, where=vwhere)
+    fres = fts_search(q, k=k * 2, user_id=user_id)
     fused = _rrf([vres, fres])
     return fused[:k]
 

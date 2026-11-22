@@ -21,10 +21,12 @@ def _schema(dim: int) -> pa.Schema:
             pa.field("id", pa.string()),
             pa.field("vector", pa.list_(pa.float32(), dim)),
             pa.field("doc_id", pa.string()),
+            pa.field("user_id", pa.string()),
             pa.field("page", pa.int32()),
             pa.field("heading", pa.string()),
             pa.field("text", pa.string()),
             pa.field("source", pa.string()),
+            pa.field("embed_model", pa.string()),
         ]
     )
 
@@ -38,6 +40,14 @@ def _db():
     return _DB
 
 
+def _schema_ok(t) -> bool:
+    try:
+        names = {f.name for f in t.schema}
+    except Exception:
+        return False
+    return {"id", "vector", "doc_id", "user_id", "text", "source", "embed_model"}.issubset(names)
+
+
 def table():
     global _TABLE
     if _TABLE is None:
@@ -46,6 +56,16 @@ def table():
                 db = _db()
                 if TABLE_NAME not in db.list_tables().tables:
                     db.create_table(TABLE_NAME, schema=_schema(settings.embed_dim))
+                else:
+                    t = db.open_table(TABLE_NAME)
+                    if not _schema_ok(t):
+                        import logging
+
+                        logging.getLogger("ragbuddy.vectors").warning(
+                            "LanceDB schema outdated; recreating table (re-ingest required)"
+                        )
+                        db.drop_table(TABLE_NAME)
+                        db.create_table(TABLE_NAME, schema=_schema(settings.embed_dim))
                 _TABLE = db.open_table(TABLE_NAME)
     return _TABLE
 
@@ -53,8 +73,37 @@ def table():
 def upsert(rows: list[dict[str, Any]]) -> None:
     if not rows:
         return
+    # normalize rows
+    norm = []
+    for r in rows:
+        rr = dict(r)
+        rr.setdefault("user_id", rr.get("user_id") or "")
+        rr.setdefault("embed_model", rr.get("embed_model") or settings.embed_model)
+        norm.append(rr)
     t = table()
-    t.add(rows)
+    try:
+        t.merge_insert("id").when_matched_update_all().when_not_matched_insert_all().execute(norm)
+    except Exception:
+        # fallback for older lancedb
+        t.add(norm)
+
+
+def delete_by_doc_id(doc_id: str) -> int:
+    t = table()
+    try:
+        t.delete(f"doc_id = '{doc_id}'")
+        return 1
+    except Exception:
+        return 0
+
+
+def delete_by_user(user_id: str) -> int:
+    t = table()
+    try:
+        t.delete(f"user_id = '{user_id}'")
+        return 1
+    except Exception:
+        return 0
 
 
 def search(vec: list[float], k: int = 8, where: str | None = None) -> list[dict[str, Any]]:

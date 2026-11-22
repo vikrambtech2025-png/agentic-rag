@@ -1,7 +1,7 @@
 [project]
-name = "rag-buddy"
-version = "0.1.0"
-description = "Agentic RAG buddy - mixed corpus (docs + web + code) with citations"
+name = "agentic-rag"
+version = "0.2.0"
+description = "Agentic RAG - mixed corpus (docs + web + code) with citations, production-hardened"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

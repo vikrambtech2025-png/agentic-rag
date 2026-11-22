@@ -65,7 +65,7 @@ def retrieve_node(state: GraphState, config: RunnableConfig = None) -> dict[str,
     seen.update(c.get("id") for c in chunks)
     for q in qs:
         try:
-            res = hybrid_search(q, k=settings.top_k)
+            res = hybrid_search(q, k=settings.top_k, user_id=state.get("user_id"))
         except Exception:
             res = []
         for r in res:

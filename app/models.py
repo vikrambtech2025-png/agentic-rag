@@ -68,3 +68,4 @@ class GraphState(TypedDict, total=False):
     citations: list[dict[str, Any]]
     unsupported: list[str]
     thread_id: str
+    user_id: str

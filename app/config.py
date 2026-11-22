@@ -25,9 +25,12 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_model: str = ""
     router_model: str = ""
+    llm_fallback_models: str = ""
     embed_model: str = "BAAI/bge-small-en-v1.5"
     embed_dim: int = 384
     tavily_api_key: str = ""
+    app_user: str = ""
+    app_password: str = ""
     data_dir: str = "./data"
     chunk_tokens: int = 800
     chunk_overlap: float = 0.15

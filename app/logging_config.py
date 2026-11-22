@@ -1,10 +1,13 @@
 """Structured logging setup."""
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
 import os
 import sys
+
+REQUEST_ID: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
 
 
 class JsonFormatter(logging.Formatter):
@@ -13,6 +16,7 @@ class JsonFormatter(logging.Formatter):
             "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
             "level": record.levelname,
             "logger": record.name,
+            "request_id": REQUEST_ID.get(),
             "msg": record.getMessage(),
         }
         if record.exc_info:

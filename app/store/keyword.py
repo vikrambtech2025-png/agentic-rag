@@ -6,21 +6,29 @@ import sqlite3
 from app.store.sqlite import connect
 
 
-def fts_search(q: str, k: int = 20) -> list[dict]:
+def fts_search(q: str, k: int = 20, user_id: str | None = None) -> list[dict]:
     conn = connect()
     try:
+        where = ""
+        params: list = [q]
+        if user_id:
+            where = " AND d.user_id = ?"
+            params.append(user_id)
+        params.append(k)
         rows = conn.execute(
-            """
+            f"""
             SELECT c.id AS id, c.doc_id AS doc_id, c.page AS page,
                    c.heading AS heading, c.text AS text,
-                   bm25(chunks_fts) AS score
+                   bm25(chunks_fts) AS score,
+                   d.source AS source, d.user_id AS user_id
             FROM chunks_fts
             JOIN chunks c ON c.id = chunks_fts.chunk_id
-            WHERE chunks_fts MATCH ?
+            JOIN documents d ON d.id = c.doc_id
+            WHERE chunks_fts MATCH ?{where}
             ORDER BY bm25(chunks_fts)
             LIMIT ?
             """,
-            (q, k),
+            tuple(params),
         ).fetchall()
         return [dict(r) for r in rows]
     except sqlite3.OperationalError:
@@ -30,12 +38,15 @@ def fts_search(q: str, k: int = 20) -> list[dict]:
 
 
 def upsert_fts(chunk_id: str, text: str, heading: str = "") -> None:
+    # No-op when FTS sync triggers are installed; kept for backwards compat.
+    return None
+
+
+def delete_by_doc(doc_id: str) -> None:
     conn = connect()
     try:
-        conn.execute(
-            "INSERT INTO chunks_fts(text, heading, chunk_id) VALUES (?,?,?)",
-            (text, heading, chunk_id),
-        )
+        conn.execute("DELETE FROM chunks WHERE doc_id = ?", (doc_id,))
+        conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
         conn.commit()
     finally:
         conn.close()
