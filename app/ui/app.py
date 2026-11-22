@@ -49,15 +49,14 @@ def _thread_id() -> str:
     return cl.user_session.get("thread_id") or "default"
 
 
-@cl.password_auth_callback
-async def auth(username: str, password: str):
-    import hmac
+if settings.app_user and settings.app_password:
+    @cl.password_auth_callback
+    async def auth(username: str, password: str):
+        import hmac
 
-    if not settings.app_user or not settings.app_password:
+        if hmac.compare_digest(username, settings.app_user) and hmac.compare_digest(password, settings.app_password):
+            return cl.User(identifier=username)
         return None
-    if hmac.compare_digest(username, settings.app_user) and hmac.compare_digest(password, settings.app_password):
-        return cl.User(identifier=username)
-    return None
 
 
 @cl.on_chat_start
