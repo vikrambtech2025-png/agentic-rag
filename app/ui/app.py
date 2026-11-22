@@ -23,26 +23,9 @@ APP = get_app()
 
 @cl.on_app_startup
 async def _startup() -> None:
-    from chainlit.server import app as fastapi_app
-    from fastapi import Response
+    from app.observability import setup_tracing
 
-    @fastapi_app.get("/readyz")
-    async def readyz():
-        import sqlite3
-
-        try:
-            from app.store.sqlite import connect
-
-            c = connect()
-            c.execute("SELECT 1").fetchone()
-            c.close()
-            status = "ok"
-            code = 200
-        except Exception as e:
-            status = f"db-error: {e}"
-            code = 503
-        # LLM reachability: lightweight, optional
-        return Response(content=status, status_code=code, media_type="text/plain")
+    setup_tracing()
 
 
 def _thread_id() -> str:
@@ -100,16 +83,21 @@ async def _ingest_file(file: cl.File) -> str:
 _RATE: dict[str, list[float]] = {}
 
 
-def _rate_ok(thread_id: str, limit: int = 20, window: float = 60.0) -> bool:
+def _rate_ok(key: str, limit: int = 20, window: float = 60.0) -> bool:
+    from app.cache import rate_limit_ok as _rl
+
+    r = _rl(key, limit, window)
+    if r is not None:
+        return bool(r)
     import time
 
     now = time.time()
-    bucket = [t for t in _RATE.get(thread_id, []) if now - t < window]
+    bucket = [t for t in _RATE.get(key, []) if now - t < window]
     if len(bucket) >= limit:
-        _RATE[thread_id] = bucket
+        _RATE[key] = bucket
         return False
     bucket.append(now)
-    _RATE[thread_id] = bucket
+    _RATE[key] = bucket
     return True
 
 
@@ -122,6 +110,12 @@ async def on_message(message: cl.Message) -> None:
     if not _rate_ok(uid):
         await cl.Message(content="Rate limit exceeded. Please wait a minute.").send()
         return
+    import time as _t
+
+    _req_t0 = _t.perf_counter()
+    from app.metrics import REQUESTS_TOTAL
+
+    REQUESTS_TOTAL.inc("chat")
     # Handle uploads
     for el in message.elements or []:
         if isinstance(el, cl.File):
@@ -201,10 +195,16 @@ async def on_message(message: cl.Message) -> None:
     try:
         result = task.result()
     except Exception as e:
+        from app.metrics import REQUEST_DURATION
+
+        REQUEST_DURATION.observe("chat", _t.perf_counter() - _req_t0)
         await step.remove()
         await msg.stream_token(f"\n[error] {e}")
         await msg.update()
         return
+    from app.metrics import REQUEST_DURATION
+
+    REQUEST_DURATION.observe("chat", _t.perf_counter() - _req_t0)
 
     await step.remove()
 

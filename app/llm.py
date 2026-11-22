@@ -76,6 +76,9 @@ def chat(
         kwargs["response_format"] = response_format
     kwargs["max_tokens"] = max_tokens if max_tokens is not None else 512
 
+    from app.metrics import LLM_CALLS, LLM_ERRORS
+
+    LLM_CALLS.inc("chat")
     candidates = [m] + [fm for fm in _fallback_models() if fm != m]
     last_err: Exception | None = None
     for cand in candidates:
@@ -84,6 +87,7 @@ def chat(
             return _chat_once(kwargs)
         except Exception as e:
             last_err = e
+            LLM_ERRORS.inc("chat")
             if not _retryable_exc(e):
                 raise
             log.warning("chat failed on %s: %s", cand, e)
@@ -121,6 +125,9 @@ def stream(
     kwargs: dict[str, Any] = dict(model=m, messages=messages, temperature=temperature, stream=True)
     kwargs["max_tokens"] = max_tokens if max_tokens is not None else 1000
 
+    from app.metrics import LLM_CALLS, LLM_ERRORS
+
+    LLM_CALLS.inc("stream")
     candidates = [m] + [fm for fm in _fallback_models() if fm != m]
     last_err: Exception | None = None
     for cand in candidates:
@@ -129,6 +136,7 @@ def stream(
             return _stream_once(kwargs, sink)
         except Exception as e:
             last_err = e
+            LLM_ERRORS.inc("stream")
             if not _retryable_exc(e):
                 raise
             log.warning("stream failed on %s: %s", cand, e)
