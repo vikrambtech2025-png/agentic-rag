@@ -8,6 +8,8 @@ from pathlib import Path
 
 from app.config import settings
 from app.ingest.chunker import chunk_document
+import json
+
 from app.ingest.loaders import (
     LoadedDoc,
     load_markdown,
@@ -16,6 +18,13 @@ from app.ingest.loaders import (
     load_url,
     load_youtube,
     sha256_text,
+)
+from app.security import (
+    audit,
+    check_quota,
+    injection_score,
+    redact_enabled,
+    redact_pii,
 )
 from app.models import Chunk
 from app.store.embeddings import embed_batch
@@ -92,6 +101,12 @@ def _persist(doc_id, user_id, source, kind, title, pages, sha, version, chunks):
 
 
 def ingest_document(doc: LoadedDoc, source: str, user_id: str | None = None) -> str:
+    check_quota(user_id)
+    # optional PII redaction
+    if redact_enabled():
+        pages = [(pn, redact_pii(t)) for pn, t in doc.pages]
+        doc = LoadedDoc(pages=pages, kind=doc.kind, title=doc.title, meta=doc.meta)
+    score = injection_score(doc.full_text)
     sha = sha256_text(doc.full_text)
     conn = migrate()
     try:
@@ -99,7 +114,6 @@ def ingest_document(doc: LoadedDoc, source: str, user_id: str | None = None) -> 
         if existing:
             conn.close()
             return existing
-        # supersede any prior version of the same source
         row = conn.execute(
             "SELECT id FROM documents WHERE source_key=?",
             (_source_key(source, user_id),),
@@ -125,7 +139,7 @@ def ingest_document(doc: LoadedDoc, source: str, user_id: str | None = None) -> 
             c2.execute(
                 """INSERT INTO documents(id,user_id,source,source_key,kind,title,pages,sha256,version,status,embed_model,added_at,updated_at,meta)
                    VALUES (?,?,?,?,?,?,?,?,?,'pending',?,datetime('now'),datetime('now'),?)""",
-                (doc_id, user_id, source, _source_key(source, user_id), doc.kind, doc.title or source, len(doc.pages), sha, 1, settings.embed_model, None),
+                (doc_id, user_id, source, _source_key(source, user_id), doc.kind, doc.title or source, len(doc.pages), sha, 1, settings.embed_model, json.dumps({"injection_score": score})),
             )
             c2.commit()
         finally:
@@ -154,7 +168,8 @@ def ingest_document(doc: LoadedDoc, source: str, user_id: str | None = None) -> 
         if prior_id and prior_id != doc_id:
             _supersede_conn(prior_id)
 
-        _persist_ready(doc_id, user_id, source, doc.kind, doc.title or source, len(doc.pages), sha, chunks)
+        _persist_ready(doc_id, user_id, source, doc.kind, doc.title or source, len(doc.pages), sha, chunks, meta={"injection_score": score})
+        audit("ingest", user_id, source)
         return doc_id
     except Exception:
         # mark failed
@@ -168,7 +183,7 @@ def ingest_document(doc: LoadedDoc, source: str, user_id: str | None = None) -> 
         raise
 
 
-def _persist_ready(doc_id, user_id, source, kind, title, pages, sha, chunks):
+def _persist_ready(doc_id, user_id, source, kind, title, pages, sha, chunks, meta=None):
     conn = migrate()
     try:
         conn.execute("DELETE FROM chunks WHERE doc_id=?", (doc_id,))
@@ -178,8 +193,8 @@ def _persist_ready(doc_id, user_id, source, kind, title, pages, sha, chunks):
                 (c.id, doc_id, i, c.page, c.heading, c.text, c.tokens, settings.embed_model),
             )
         conn.execute(
-            """UPDATE documents SET status='ready', title=?, pages=?, sha256=?, updated_at=datetime('now') WHERE id=?""",
-            (title, pages, sha, doc_id),
+            """UPDATE documents SET status='ready', title=?, pages=?, sha256=?, meta=?, updated_at=datetime('now') WHERE id=?""",
+            (title, pages, sha, json.dumps(meta) if meta else None, doc_id),
         )
         conn.commit()
     finally:
@@ -235,6 +250,7 @@ def delete_document(doc_id: str, user_id: str | None = None) -> bool:
     finally:
         conn.close()
     delete_by_doc_id(doc_id)
+    audit("delete", user_id, doc_id)
     return True
 
 

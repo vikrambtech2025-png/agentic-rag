@@ -17,6 +17,13 @@ import ipaddress
 import socket
 
 from app.config import settings
+from app.security import (
+    check_pdf_pages,
+    redact_enabled,
+    redact_pii,
+    safe_fetch,
+    sniff_mime,
+)
 
 MAX_FILE_BYTES = 50 * 1024 * 1024  # 50 MB
 ALLOWED_EXTS = {".pdf", ".md", ".markdown", ".txt", ".text"}
@@ -50,6 +57,10 @@ def _check_file(path: Path) -> None:
 def load_pdf(path: str | Path) -> LoadedDoc:
     p = Path(path)
     _check_file(p)
+    import fitz
+
+    with fitz.open(str(p)) as d:
+        check_pdf_pages(d.page_count)
     pages_raw = pymupdf4llm.to_markdown(str(p), page_chunks=True)
     # fallback to rag path if layout parser yields no text
     try:
@@ -70,7 +81,10 @@ def load_pdf(path: str | Path) -> LoadedDoc:
     title = Path(path).stem
     text = "\n".join(t for _, t in pages)
     if len(text.strip()) < 50:
-        raise ValueError("PDF has no extractable text (scanned?). OCR support lands in M5.")
+        ocr_text = _ocr_pdf(p)
+        if ocr_text and len(ocr_text.strip()) >= 50:
+            return LoadedDoc(pages=[(1, ocr_text)], meta={"pages": 1, "ocr": True}, kind="pdf", title=title)
+        raise ValueError("PDF has no extractable text (scanned?). Install rapidocr-onnxruntime or pytesseract for OCR.")
     return LoadedDoc(pages=pages, meta={"pages": len(pages)}, kind="pdf", title=title)
 
 
@@ -78,6 +92,8 @@ def load_markdown(path: str | Path) -> LoadedDoc:
     p = Path(path)
     _check_file(p)
     text = p.read_text(encoding="utf-8", errors="replace")
+    if redact_enabled():
+        text = redact_pii(text)
     return LoadedDoc(pages=[(1, text)], meta={}, kind="markdown", title=Path(path).stem)
 
 
@@ -85,6 +101,8 @@ def load_text(path: str | Path) -> LoadedDoc:
     p = Path(path)
     _check_file(p)
     text = p.read_text(encoding="utf-8", errors="replace")
+    if redact_enabled():
+        text = redact_pii(text)
     return LoadedDoc(pages=[(1, text)], meta={}, kind="text", title=Path(path).stem)
 
 
@@ -110,11 +128,7 @@ def _safe_url(url: str) -> None:
 
 
 def load_url(url: str) -> LoadedDoc:
-    _safe_url(url)
-    resp = httpx.get(url, timeout=30, follow_redirects=True, headers={"User-Agent": "rag-buddy/0.1"})
-    # re-check final host after redirects
-    _safe_url(str(resp.url))
-    resp.raise_for_status()
+    resp = safe_fetch(url)
     html = resp.text
     # naive html -> text
     text = _html_to_text(html)
@@ -180,4 +194,30 @@ def sha256_text(text: str) -> str:
 
 def new_id() -> str:
     return str(uuid.uuid4())
+
+
+def _ocr_pdf(path: Path) -> str:
+    try:
+        from rapidocr_onnxruntime import RapidOCR
+
+        ocr = RapidOCR()
+        result, _ = ocr(str(path))
+        if result:
+            return "\n".join(r[1] for r in result)
+    except Exception:
+        pass
+    try:
+        import fitz
+        import pytesseract
+        from PIL import Image
+
+        doc = fitz.open(str(path))
+        out = []
+        for page in doc:
+            pix = page.get_pixmap(dpi=200)
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            out.append(pytesseract.image_to_string(img))
+        return "\n".join(out)
+    except Exception:
+        return ""
 

@@ -129,6 +129,10 @@ async def on_message(message: cl.Message) -> None:
             pass
 
     text = (message.content or "").strip()
+    from app.security import audit
+
+    if text:
+        audit("query", uid, text[:200])
     # Memory shortcut: "remember: ..."
     if text.lower().startswith("remember:"):
         fact = text.split(":", 1)[1].strip()

@@ -86,6 +86,15 @@ CREATE TABLE IF NOT EXISTS ingest_jobs (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT,
+    event TEXT NOT NULL,
+    detail TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id);
+
 """
 
 INDEXES = """
