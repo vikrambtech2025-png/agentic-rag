@@ -6,14 +6,33 @@ import sqlite3
 from app.store.sqlite import connect
 
 
-def fts_search(q: str, k: int = 20, user_id: str | None = None) -> list[dict]:
+def fts_search(q: str, k: int = 20, user_id: str | None = None, filters: dict | None = None) -> list[dict]:
     conn = connect()
     try:
         where = ""
         params: list = [q]
         if user_id:
-            where = " AND d.user_id = ?"
+            where += " AND d.user_id = ?"
             params.append(user_id)
+        f = filters or {}
+        if f.get("source"):
+            vals = f["source"]
+            if isinstance(vals, str):
+                vals = [vals]
+            where += " AND d.source IN (" + ",".join("?" for _ in vals) + ")"
+            params.extend(vals)
+        if f.get("doc_id"):
+            vals = f["doc_id"]
+            if isinstance(vals, str):
+                vals = [vals]
+            where += " AND c.doc_id IN (" + ",".join("?" for _ in vals) + ")"
+            params.extend(vals)
+        if f.get("page_min") is not None:
+            where += " AND c.page >= ?"
+            params.append(int(f["page_min"]))
+        if f.get("page_max") is not None:
+            where += " AND c.page <= ?"
+            params.append(int(f["page_max"]))
         params.append(k)
         rows = conn.execute(
             f"""

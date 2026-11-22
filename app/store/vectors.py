@@ -25,6 +25,7 @@ def _schema(dim: int) -> pa.Schema:
             pa.field("page", pa.int32()),
             pa.field("heading", pa.string()),
             pa.field("text", pa.string()),
+            pa.field("parent_text", pa.string()),
             pa.field("source", pa.string()),
             pa.field("embed_model", pa.string()),
         ]
@@ -45,7 +46,7 @@ def _schema_ok(t) -> bool:
         names = {f.name for f in t.schema}
     except Exception:
         return False
-    return {"id", "vector", "doc_id", "user_id", "text", "source", "embed_model"}.issubset(names)
+    return {"id", "vector", "doc_id", "user_id", "text", "parent_text", "source", "embed_model"}.issubset(names)
 
 
 def table():

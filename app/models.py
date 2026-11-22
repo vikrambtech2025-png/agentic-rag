@@ -13,6 +13,8 @@ class Chunk:
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     doc_id: str = ""
     text: str = ""
+    embed_text: str = ""
+    parent_text: str = ""
     page: int = 0
     heading: str = ""
     source: str = ""

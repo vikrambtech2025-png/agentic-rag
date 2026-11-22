@@ -64,13 +64,15 @@ def chunk_document(doc: LoadedDoc, source: str, doc_id: str) -> list[Chunk]:
                 piece = piece.strip()
                 if not piece:
                     continue
-                embed_text = f"{heading}\n{piece}" if heading else piece
+                embed_text = f"{source}\n{heading}\n{piece}".strip() if heading else f"{source}\n{piece}".strip()
                 cid = hashlib.sha256(f"{source}|{page_no}|{ordinal}|{piece}".encode()).hexdigest()[:32]
                 out.append(
                     Chunk(
                         id=cid,
                         doc_id=doc_id,
                         text=piece,
+                        embed_text=embed_text,
+                        parent_text=body,
                         page=page_no,
                         heading=heading,
                         source=source,

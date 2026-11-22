@@ -198,3 +198,4 @@ Key env vars (see `.env.example`):
 - Storage: SQLite in WAL mode with versioned migrations; LanceDB upserts via merge_insert.
 - Observability: LOG_FORMAT=json emits request_id; /readyz checks DB; /health static.
 - Single-node: SQLite + LanceDB + in-memory rate limit. For multi-worker, move to Postgres + pgvector + Redis (Phase 2).
+- Retrieval (Phase 1): hybrid RRF + MMR dedup + optional cross-encoder rerank (install with uv sync --extra rerank), contextual chunk headers, small-to-big (parent_text), metadata filters, relevance gate.

@@ -99,6 +99,9 @@ def grade_node(state: GraphState, config: RunnableConfig = None) -> dict[str, An
     chunks = state.get("chunks") or []
     if not chunks:
         return {"sufficient": state.get("route") == "chat"}
+    top_score = max((c.get("_rerank") if c.get("_rerank") is not None else (c.get("score") or 0.0)) for c in chunks)
+    if top_score <= 0:
+        return {"sufficient": False}
     ctx = "\n\n".join(f"[{i+1}] {c.get('text','')[:500]}" for i, c in enumerate(chunks[:8]))
     try:
         messages = [
@@ -152,8 +155,11 @@ def _build_context(state: GraphState) -> tuple[str, list[dict[str, Any]]]:
     n = 1
     cit_map: list[dict[str, Any]] = []
     for c in chunks:
-        items.append((str(n), c.get("text", ""), f"{c.get('source','')} p.{c.get('page')}"))
-        cit_map.append({"n": n, "chunk_id": c.get("id"), "source": c.get("source"), "page": c.get("page"), "snippet": c.get("text", "")[:300]})
+        h = c.get("heading") or ""
+        txt = c.get("parent_text") or c.get("text", "")
+        ctx_text = f"{h}\n{txt}".strip() if h else txt
+        items.append((str(n), ctx_text, f"{c.get('source','')} p.{c.get('page')}"))
+        cit_map.append({"n": n, "chunk_id": c.get("id"), "source": c.get("source"), "page": c.get("page"), "snippet": txt[:300]})
         n += 1
     for w in web:
         items.append((str(n), w.get("snippet", ""), w.get("url", "")))

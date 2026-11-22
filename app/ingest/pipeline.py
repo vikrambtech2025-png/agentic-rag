@@ -131,7 +131,7 @@ def ingest_document(doc: LoadedDoc, source: str, user_id: str | None = None) -> 
         finally:
             c2.close()
 
-        texts = [ch.text for ch in chunks]
+        texts = [ch.embed_text or ch.text for ch in chunks]
         vecs = embed_batch(texts)
         rows = [
             {
@@ -142,6 +142,7 @@ def ingest_document(doc: LoadedDoc, source: str, user_id: str | None = None) -> 
                 "page": ch.page,
                 "heading": ch.heading,
                 "text": ch.text,
+                "parent_text": ch.parent_text or ch.text,
                 "source": source,
                 "embed_model": settings.embed_model,
             }
