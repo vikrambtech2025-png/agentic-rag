@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from contextlib import contextmanager
 from typing import Any, Callable
 
@@ -73,20 +74,44 @@ class _NoopTracer:
         return _NoopSpan()
 
 
-@contextmanager
-def span(name: str, **attrs: Any):
-    tracer = get_tracer()
-    try:
-        with tracer.start_as_current_span(name) as s:
-            for k, v in attrs.items():
+class _SpanCM:
+    def __init__(self, name, attrs):
+        self.name = name
+        self.attrs = attrs
+        self._span = None
+        self._token = None
+
+    def __enter__(self):
+        tracer = get_tracer()
+        try:
+            self._span = tracer.start_as_current_span(self.name)
+            self._span.__enter__()
+            for k, v in self.attrs.items():
                 try:
-                    s.set_attribute(k, v)
+                    self._span.set_attribute(k, v)
                 except Exception:
                     pass
-            yield s
-    except Exception:
-        # noop tracer path
-        yield _NoopSpan()
+        except Exception:
+            self._span = _NoopSpan()
+            self._span.__enter__()
+        return self._span
+
+    def __exit__(self, exc_type, exc, tb):
+        if self._span is not None:
+            try:
+                if exc is not None:
+                    try:
+                        self._span.record_exception(exc)
+                    except Exception:
+                        pass
+                self._span.__exit__(exc_type, exc, tb)
+            except Exception:
+                pass
+        return False
+
+
+def span(name: str, **attrs: Any):
+    return _SpanCM(name, attrs)
 
 
 def trace_node(name: str, fn: Callable):
