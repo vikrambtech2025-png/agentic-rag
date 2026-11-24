@@ -20,13 +20,16 @@ console = Console()
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("question", nargs="+")
-    parser.add_argument("--thread", default="cli")
+    parser.add_argument("--thread", default=None)
     parser.add_argument("--trace", action="store_true", default=True)
     args = parser.parse_args()
     question = " ".join(args.question)
 
+    import os
+
+    thread = args.thread or ("cli-" + os.urandom(4).hex())
     app = get_app()
-    config = {"configurable": {"thread_id": args.thread}}
+    config = {"configurable": {"thread_id": thread}}
     state = {"question": question, "messages": []}
 
     console.rule(f"[bold]Question[/bold]: {question}")
