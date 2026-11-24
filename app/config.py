@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     chunk_tokens: int = 800
     chunk_overlap: float = 0.15
     top_k: int = 8
-    max_hops: int = 3
+    max_hops: int = 2
 
     def _is_placeholder(self, key: str) -> bool:
         k = (key or "").strip()

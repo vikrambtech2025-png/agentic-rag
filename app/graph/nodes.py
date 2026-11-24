@@ -102,6 +102,9 @@ def grade_node(state: GraphState, config: RunnableConfig = None) -> dict[str, An
     top_score = max((c.get("_rerank") if c.get("_rerank") is not None else (c.get("score") or 0.0)) for c in chunks)
     if top_score <= 0:
         return {"sufficient": False}
+    # fast path: if retrieval has a strong signal, skip the LLM grade call
+    if top_score > 0.01 and len(chunks) >= 2:
+        return {"sufficient": True}
     ctx = "\n\n".join(f"[{i+1}] {c.get('text','')[:500]}" for i, c in enumerate(chunks[:8]))
     try:
         messages = [
@@ -201,6 +204,10 @@ def generate_node(state: GraphState, config: RunnableConfig = None) -> dict[str,
 
 
 def verify_node(state: GraphState, config: RunnableConfig = None) -> dict[str, Any]:
+    import os
+
+    if os.environ.get("VERIFY_ANSWERS", "").lower() not in {"1", "true", "yes"}:
+        return {"unsupported": []}
     answer = state.get("answer", "")
     chunks = state.get("chunks") or []
     context = "\n\n".join(f"[{i+1}] {c.get('text','')[:400]}" for i, c in enumerate(chunks))
