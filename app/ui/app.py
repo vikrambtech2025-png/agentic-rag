@@ -116,7 +116,14 @@ async def on_message(message: cl.Message) -> None:
     from app.metrics import REQUESTS_TOTAL
 
     REQUESTS_TOTAL.inc("chat")
-    # Handle uploads
+    from app.budget import CURRENT_USER, check_budget
+
+    CURRENT_USER.set(uid)
+    try:
+        check_budget(uid)
+    except Exception as e:
+        await cl.Message(content=f"Budget exceeded: {e}").send()
+        return    # Handle uploads
     for el in message.elements or []:
         if isinstance(el, cl.File):
             await cl.Message(content=f"Ingesting {el.name}...").send()
@@ -164,6 +171,14 @@ async def on_message(message: cl.Message) -> None:
         return
 
     if not text:
+        return
+    # query cache
+    from app.cache import get_cached, set_cached
+
+    cached = get_cached(uid, text)
+    if cached:
+        msg = cl.Message(content=cached.get("answer", ""))
+        await msg.send()
         return
 
     thread_id = _thread_id()
@@ -213,9 +228,18 @@ async def on_message(message: cl.Message) -> None:
     await step.remove()
 
     answer = result.get("answer", "") if isinstance(result, dict) else ""
+    citations = result.get("citations", []) if isinstance(result, dict) else []
+    # Ensure the answer is shown even when no tokens were streamed (e.g. chat route)
+    if not answer:
+        answer = "I couldn't generate an answer. Please try again."
+    msg.content = answer
+    if answer != "I couldn't generate an answer. Please try again.":
+        try:
+            set_cached(uid, text, answer, citations)
+        except Exception:
+            pass
     # if streaming already pushed tokens, answer may duplicate; clear content then set
     # We streamed tokens already, so don't overwrite; just attach sources.
-    citations = result.get("citations", []) if isinstance(result, dict) else []
     elements = []
     for c in citations:
         elements.append(
